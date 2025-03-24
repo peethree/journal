@@ -17,10 +17,11 @@ bool FileExists(char *filename) {
 
 void update_journal(int day, int month, int year, char entry[])
 {
-    // make sure file exists
+    // make sure file exists, make it otherwise
     if (!FileExists("journal.txt")) {
         printf("Journal doesn't exist.\n");
         printf("Creating new journal file...\n");
+
         FILE *file = fopen("journal.txt", "w");
         fprintf(file, "%02d/%02d/%04d\n", day, month, year);
         fprintf(file, "%s\n", entry);
@@ -75,12 +76,3 @@ int main(int argc, char **argv) {
     printf("Exiting journal\n");
     return 0;       
 }
-
-
-// journal app in c
-
-// get time (day / year)
-
-// take user input for the day
-
-// save all the input in a txt file
