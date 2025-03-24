@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
     int month = tm_info->tm_mon + 1;    
     int year = tm_info->tm_year + 1900;
 
-    printf("day: %d, month: %d, year: %d\n", day, month, year);
+    // printf("day: %d, month: %d, year: %d\n", day, month, year);
 
     // buffer size
     char todays_entry[1000];
