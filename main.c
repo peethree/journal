@@ -126,11 +126,11 @@ int main() {
     if (strcmp(answer, yes_answer) == 0) {
         update_journal(day, month, year, todays_entry);   
         printf("Adding entry to your journal\n"); 
-    }
+        // add it to database as well
+        insert_into_db(db, todays_entry);   
+        printf("Updating database...");
+    } 
 
-    // add it to database as well
-    insert_into_db(db, todays_entry);    
-        
     cleanup(todays_entry, db);     
     return 0;       
 }
