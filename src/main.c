@@ -77,11 +77,11 @@ int main() {
     int month = tm_info->tm_mon + 1;    
     int year = tm_info->tm_year + 1900;
 
-    // dynamic buffer for user input
+    
     char *todays_entry = NULL;
-    // if it's not big enough, buffer_size will be increased.
+    // if the buffer is not big enough, buffer_size will be increased by getline.
     size_t buffer_size = 256;
-    printf("Write today's journal entry:\n");  
+    printf("Write today's journal entry:\n");   
     printf("> "); 
     size_t characters_read = getline(&todays_entry, &buffer_size, stdin);
     // printf("%zu\n", characters_read);
@@ -92,21 +92,43 @@ int main() {
         return 1;
     }
 
-    // buffer for 1 char + null terminator
+    // buffer for 1 char + null terminator  
     char answer[sizeof(char) + 1];
-    printf("Add today's entry to your journal? y/n\n");
-    scanf("%s", answer);
-    char *yes_answer = "y";
 
-    // if answer is yes, update journal
-    if (strcmp(answer, yes_answer) == 0) {
-        update_journal(day, month, year, todays_entry);   
-        printf("Adding entry to your journal\n");
+    while (1) {              
+        printf("Add today's entry to your journal? y/n\n");
+        printf("> ");
 
-        // add it to database as well
-        insert_into_db(db, todays_entry);   
-        printf("Updating database...");
-    } 
+        if (fgets(answer, sizeof(answer), stdin) == NULL) {
+            continue;
+        }   
+        
+        // flush extra input if it's bigger than the buffer
+        if (strchr(answer, '\n') == NULL) {
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF); 
+        }
+
+        // remove newline from fgets answer to improve strcmp logic below
+        char *newline = strchr(answer, '\n');
+        if (newline) *newline = '\0';
+
+        // if answer is yes, update journal
+        if (strcmp(answer, "y") == 0) {
+            update_journal(day, month, year, todays_entry);   
+            printf("Adding entry to your journal\n");
+
+            // add it to database as well
+            insert_into_db(db, todays_entry);   
+            printf("Updating database...\n");
+            break;
+        } else if (strcmp(answer, "n") == 0) {
+            printf("Not adding your entry to your journal...\n");
+            break;            
+        } else {
+            printf("Invalid input...\n");
+        }        
+    }    
 
     // free memory
     cleanup(todays_entry, db);     

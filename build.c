@@ -3,6 +3,7 @@
 #include "nob.h"
 
 // cc -o build build.c
+// avoids recompiling sqlite3 every time, instead uses static object file
 int main(int argc, char** argv) {   
     // NOB_GO_REBUILD_URSELF(argc, argv);
     Cmd cmd = {0};
