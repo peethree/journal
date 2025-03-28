@@ -5,6 +5,13 @@
 #include <string.h>
 #include <stdlib.h>
 
+// TODO:
+typedef enum {
+    ADD_ENTRY,
+    READ_ENTRY,
+    EXIT
+} Options;
+
 void update_journal(int day, int month, int year, char entry[]) 
 {
     // open file in append mode, create it if it doesn't exist
@@ -78,6 +85,7 @@ int main() {
     int year = tm_info->tm_year + 1900;
 
     
+    // case: add_entry
     char *todays_entry = NULL;
     // if the buffer is not big enough, buffer_size will be increased by getline.
     size_t buffer_size = 256;
@@ -129,6 +137,9 @@ int main() {
             printf("Invalid input...\n");
         }        
     }    
+
+    // case read entry
+    //
 
     // free memory
     cleanup(todays_entry, db);     

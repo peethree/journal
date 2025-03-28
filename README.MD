@@ -11,7 +11,7 @@
 ##### Upon running the program, user is queried for an entry. The user can then type and once done typing, the program will ask to confirm if it should be saved to the journal.
 
 ##### Answer "y" to save, "n" to exit the program. Or you can cancel it by pressing ctrl + C.
-##### Now also saves the entry into a sqlite3 db.
+##### Now also saves the entry into a sqlite db.
 
 <br>
 
