@@ -6,10 +6,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-// #define NOB_IMPLEMENTATION
-// #define NOB_STRIP_PREFIX
-// #include "nob.h"
-
 void update_journal(int day, int month, int year, char entry[]) 
 {
     // open file in append mode, create it if it doesn't exist
@@ -46,10 +42,10 @@ int insert_into_db(sqlite3 *db, char* todays_entry)
         fprintf(stderr, "Failed to execute statement: %s\n", sqlite3_errmsg(db));
     }
 
-    // release memorty once finalized
+    // release memory once finalized
     sqlite3_finalize(statement);
 
-    return rc
+    return rc;
 }
 
 void cleanup(char* todays_entry, sqlite3 *db) 
@@ -60,27 +56,7 @@ void cleanup(char* todays_entry, sqlite3 *db)
     printf("Closing database...\n");
 }
 
-int main() {   
-    // nob building script (doesn't seem to work with multiple source files) but it was quite convenient for only 1
-
-    // NOB_GO_REBUILD_URSELF(argc, argv);
-    // Cmd cmd = {0};
-    // cmd_append(&cmd, "cc", 
-    //     "-Wall", 
-    //     "-Wextra", 
-    //     "-Wno-cast-function-type", 
-    //     "-Wno-unused-variable", 
-    //     "-Wno-implicit-fallthrough", 
-    //     "-o", "journal", 
-    //     "main.c", 
-    //     "sqlite3.c", 
-    //     "-lsqlite3");
-
-    // if (!cmd_run_sync(cmd)) {
-    //     nob_log(NOB_ERROR, "Build failed");
-    //     return 1;
-    // }    
-    
+int main() {      
     // db
     sqlite3 *db;
     const char* db_name = "test.db";
