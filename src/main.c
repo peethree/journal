@@ -1,4 +1,3 @@
-// cc -o journal main.c sqlite3.c -lsqlite3 -Wall -Wextra -Wno-cast-function-type -Wno-unused-variable -Wno-implicit-fallthrough -Wno-unused-but-set-variable
 #include <time.h>
 #include <stdio.h>
 #include "sqlite3.h"
@@ -33,7 +32,7 @@ int insert_into_db(sqlite3 *db, char* todays_entry)
         return rc;
     }
 
-    // bind date to placeholder (1)
+    // bind entry to placeholder (1 in this case, if there were more placeholders -- the next would be 2 and so on)
     sqlite3_bind_text(statement, 1, todays_entry, -1, SQLITE_STATIC);
 
     // evaluate statement
@@ -44,7 +43,6 @@ int insert_into_db(sqlite3 *db, char* todays_entry)
 
     // release memory once finalized
     sqlite3_finalize(statement);
-
     return rc;
 }
 
@@ -56,7 +54,7 @@ void cleanup(char* todays_entry, sqlite3 *db)
     printf("Closing database...\n");
 }
 
-int main() {      
+int main() {    
     // db
     sqlite3 *db;
     const char* db_name = "test.db";
@@ -81,10 +79,12 @@ int main() {
 
     // dynamic buffer for user input
     char *todays_entry = NULL;
-    size_t buffer_size = 0;
-    printf("Write today's journal entry:\n");   
+    // if it's not big enough, buffer_size will be increased.
+    size_t buffer_size = 256;
+    printf("Write today's journal entry:\n");  
+    printf("> "); 
     size_t characters_read = getline(&todays_entry, &buffer_size, stdin);
-    printf("%zu\n", characters_read);
+    // printf("%zu\n", characters_read);
  
     if (characters_read <= 1) {
         printf("No input given...\n"); 
@@ -101,12 +101,14 @@ int main() {
     // if answer is yes, update journal
     if (strcmp(answer, yes_answer) == 0) {
         update_journal(day, month, year, todays_entry);   
-        printf("Adding entry to your journal\n"); 
+        printf("Adding entry to your journal\n");
+
         // add it to database as well
         insert_into_db(db, todays_entry);   
         printf("Updating database...");
     } 
 
+    // free memory
     cleanup(todays_entry, db);     
     return 0;       
 }
