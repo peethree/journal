@@ -7,7 +7,7 @@
 
 // TODO:
 typedef enum {
-    ADD_ENTRY,
+    ADD_ENTRY = 1,
     READ_ENTRY,
     EXIT
 } Options;
@@ -53,51 +53,29 @@ int insert_into_db(sqlite3 *db, char* todays_entry)
     return rc;
 }
 
-void cleanup(char* todays_entry, sqlite3 *db) 
-{
-    free(todays_entry);
-    sqlite3_close(db);
-    printf("Exiting journal...\n");
-    printf("Closing database...\n");
-}
+char* todays_entry_string() 
+{    
+    char* todays_entry = NULL;
 
-int main() {    
-    // db
-    sqlite3 *db;
-    const char* db_name = "test.db";
-    int rc = sqlite3_open(db_name, &db);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
-        sqlite3_close(db);
-        return 1;
-    }
-    printf("Opened db successfully...\n");    
-
-    // get time
-    time_t t;
-    struct tm *tm_info;
-    time(&t);
-    tm_info = localtime(&t);
-  
-    // month initialized at 0 so + 1, year at -1900
-    int day = tm_info->tm_mday;
-    int month = tm_info->tm_mon + 1;    
-    int year = tm_info->tm_year + 1900;
-
-    
-    // case: add_entry
-    char *todays_entry = NULL;
     // if the buffer is not big enough, buffer_size will be increased by getline.
     size_t buffer_size = 256;
     printf("Write today's journal entry:\n");   
     printf("> "); 
     size_t characters_read = getline(&todays_entry, &buffer_size, stdin);
     // printf("%zu\n", characters_read);
- 
+
     if (characters_read <= 1) {
         printf("No input given...\n"); 
-        cleanup(todays_entry, db);        
-        return 1;
+        free(todays_entry);        
+        return NULL;
+    }
+    return todays_entry;
+}
+
+void add_entry(sqlite3 *db, int day, int month, int year, char* todays_entry)
+{
+    if (todays_entry == NULL) {
+        return;
     }
 
     // buffer for 1 char + null terminator  
@@ -136,13 +114,83 @@ int main() {
         } else {
             printf("Invalid input...\n");
         }        
-    }    
+    }  
+}
 
+
+int main() {    
+    // db
+    sqlite3 *db;
+    const char* db_name = "test.db";
+    int rc = sqlite3_open(db_name, &db);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return 1;
+    }
+    printf("Opened db successfully...\n");  
+
+    // get time
+    time_t t = time(NULL);
+    struct tm *tm_info = localtime(&t);
+  
+    // month initialized at 0 so + 1, year at -1900
+    int day = tm_info->tm_mday;
+    int month = tm_info->tm_mon + 1;    
+    int year = tm_info->tm_year + 1900;
+    // printf("%d, %d, %d\n", day, month, year);
+
+    // menu options
+    char *option = NULL;
+    size_t option_buffer = 8;
+    char *todays_entry = NULL;
+    bool exit = false;
+
+    while (!exit) {
+        printf("1. Add entry\n");
+        printf("2. Read entry\n");
+        printf("3. Exit\n");
+        printf("Choose an option.\n");
+        printf("> ");
+
+        size_t options_read = getline(&option, &option_buffer, stdin);
+        if (options_read < 1) {
+            printf("Invalid input.\n");
+            continue;
+        }
+
+        char *endptr;
+        // convert user input to an integer to be compared against in the following switch statement
+        int menu_option = strtol(option, &endptr, 10);        
+
+        switch (menu_option) {
+            case ADD_ENTRY:  
+                todays_entry = todays_entry_string();              
+                add_entry(db, day, month, year, todays_entry);
+                break;
+            case (READ_ENTRY):
+                // TODO:
+                printf("read entry\n");
+                break;
+            case (EXIT):
+                printf("Exiting...\n");
+                exit = true;
+                break;
+            default:
+                printf("Invalid option.\n");
+                break;
+        }
+    }  
+  
     // case read entry
     //
 
-    // free memory
-    cleanup(todays_entry, db);     
+    printf("Closing database...\n");
+    sqlite3_close(db); 
+
+    free(option);
+    free(todays_entry);
+        
     return 0;       
 }
 
