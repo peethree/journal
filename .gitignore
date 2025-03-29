@@ -2,3 +2,6 @@ journal.txt
 journal.old
 sql.sql
 test.db
+build.old
+build
+journal

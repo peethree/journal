@@ -3,9 +3,8 @@
 #include "nob.h"
 
 // cc -o build build.c
-
-int main(int argc, char** argv) {   
-    // NOB_GO_REBUILD_URSELF(argc, argv);
+int main(int argc, char** argv) {       
+    NOB_GO_REBUILD_URSELF(argc, argv);
     Cmd cmd = {0};
     cmd_append(&cmd, "cc", 
         "-Wall", 
