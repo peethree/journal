@@ -3,16 +3,24 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#include <wchar.h>
 
 #include "sqlite3.h"
 #include "raylib.h"
 #include "resource_dir.h"
+#include "../nob.h"
 
 typedef enum {
     ADD_ENTRY = 1,
     READ_ENTRY,
     EXIT
 } Options;
+
+typedef struct {
+    char** items;
+    int capacity;
+    int count;
+} Placeholder;
 
 void update_journal(int day, int month, int year, char entry[]) 
 {
@@ -55,7 +63,7 @@ int insert_into_db(sqlite3 *db, char* todays_entry)
     return rc;
 }
 
-char* todays_entry_string() 
+char* get_todays_entry() 
 {    
     char* todays_entry = NULL;
 
@@ -120,6 +128,90 @@ void add_entry(sqlite3 *db, int day, int month, int year, char* todays_entry)
     }  
 }
 
+// TODO:
+int read_from_db(sqlite3 *db)
+{
+    // statement for specific date
+    char* statement = "select * from journal where timestamp = (?)"; 
+
+}
+
+// construct the value for the timestamp first inside raylib based on user input
+void concatenate_placeholder_chars() 
+{
+    //
+}
+
+void set_placeholder(Placeholder *placeholder, char* user_input) 
+{
+    placeholder->items = user_input;
+}
+
+void init_raylib() 
+{
+    SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI);
+    InitWindow(1280, 800, "hello journal");
+    SearchAndSetResourceDir("resources");
+
+    Placeholder placeholder = { 0 }; 
+
+    bool enterPressed = false;
+    
+    // raylib loop
+    while (!WindowShouldClose())
+    {
+        BeginDrawing();
+        ClearBackground(BLACK);
+
+        // TODO:
+        // set_placeholder(&placeholder, ...);
+
+        // refactor this to seperate function
+        int unicodeIntPressed = GetCharPressed();
+        if (unicodeIntPressed > 0) {
+            char* newChar = malloc(8); 
+            if (newChar) {
+                snprintf(newChar, 8, "%c", unicodeIntPressed);
+                nob_da_append(&placeholder, newChar);
+            }
+        }
+
+        // remove the last char added to items
+        if (IsKeyPressed(KEY_BACKSPACE)) {            
+            if (placeholder.count > 0) {
+                placeholder.count--;
+            }
+        }
+
+        DrawText("which date's entry would you like to view? example: 31/03/2001", 0, 0, 30, RED);        
+        
+        if (!enterPressed) {
+        // draw the items in placeholder
+            for (size_t i = 0; i < placeholder.count; i++) {
+                if (placeholder.items[i]) {
+                    DrawText(placeholder.items[i], 200 + (i * 50), 200, 40, RED);
+                }
+            }
+        }
+        // TODO:
+        // construct a string out of all the items in placeholder
+
+        // save the string when enter is pressed and process it
+        if (IsKeyPressed(KEY_ENTER)) {
+            if (!enterPressed) {
+                enterPressed = true;
+            } else {
+                // TODO: find a nicer way to reset this flag
+                enterPressed = false;
+            }
+            placeholder.count = 0;
+        }
+        
+        EndDrawing();
+    }
+
+    CloseWindow(); 
+}
 
 int main() {    
     // db
@@ -168,50 +260,11 @@ int main() {
 
         switch (menu_option) {
             case ADD_ENTRY:  
-                todays_entry = todays_entry_string();              
+                todays_entry = get_todays_entry();              
                 add_entry(db, day, month, year, todays_entry);
                 break;
             case (READ_ENTRY):      
-                // case read entry
-                // Tell the window to use vsync and work on high DPI displays
-                SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI);
-
-                // Create the window and OpenGL context
-                InitWindow(1280, 800, "Hello Raylib");
-
-                // Utility function from resource_dir.h to find the resources folder and set it as the current working directory so we can load from it
-                SearchAndSetResourceDir("resources");
-
-                // Load a texture from the resources directory
-                Texture wabbit = LoadTexture("wabbit_alpha.png");
-                
-                // game loop
-                while (!WindowShouldClose())		// run the loop untill the user presses ESCAPE or presses the Close button on the window
-                {
-                    // drawing
-                    BeginDrawing();
-
-                    // Setup the back buffer for drawing (clear color and depth buffers)
-                    ClearBackground(BLACK);
-
-                    // draw some text using the default font
-                    DrawText("Hello Raylib", 200,200,20,WHITE);
-
-                    // draw our texture to the screen
-                    DrawTexture(wabbit, 400, 200, WHITE);
-                    
-                    // end the frame and get ready for the next one  (display frame, poll input, etc...)
-                    EndDrawing();
-                }
-
-                // cleanup
-                // unload our texture so it can be cleaned up
-                UnloadTexture(wabbit);
-
-                // destroy the window and cleanup the OpenGL context
-                CloseWindow();
-                exit = true;      
-                    
+                init_raylib();                   
                 break;
             case (EXIT):
                 printf("Exiting...\n");
