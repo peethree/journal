@@ -8,11 +8,12 @@
 
 ##### For ease of use, I'd advice making a shell script (bash in my case) in /usr/local/bin/ that runs the program from its actual path and saving it as /usr/local/bin/journal so the program can be run simply by writing "journal" in the terminal.
 
-##### Upon running the program, user is queried for an entry. The user can then type and once done typing, the program will ask to confirm if it should be saved to the journal.
+##### Upon running the program, user is met with a menu of choices inside the terminal. the user can either add an entry. If chosen, one can then type a message and once done writing (enter is pressed), the program will ask to confirm if it should be saved or not. Answer "y" to save, "n" to exit the program. Or cancel the program by pressing ctrl + C.
 
-##### Answer "y" to save, "n" to exit the program. Or you can cancel it by pressing ctrl + C.
 ##### Now also saves the entry into a sqlite db.
 
-<br>
+##### Implemented Raylib to read text from the sqlite db. This can be done if the user has chosen for the 2nd menu option: "Read entry" (I know this is very dumb use case hehehe). If given input exists (in my case the db has id, text and timestamp fields (for now . . .)), the program will output the text inside the raylib window. This window can be exited by pressing 'ESC'.
 
-###### I will add more things to it if I feel it's necessary. Probably something to avoid copying the date if multiple entries were written on a single day. Maybe a command to read some of the entries would be nice too.
+##### The last menu option is exit, which does as it describes . . . 
+
+<br>

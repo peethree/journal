@@ -3,7 +3,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
-#include <wchar.h>
 
 #include "sqlite3.h"
 #include "raylib.h"
@@ -129,33 +128,160 @@ void add_entry(sqlite3 *db, int day, int month, int year, char* todays_entry)
 }
 
 // TODO:
-int read_from_db(sqlite3 *db)
+int read_from_db(sqlite3 *db, char** date, char** entry)
 {
+    printf("%s\n", *date);
+    sqlite3_stmt *statement;
     // statement for specific date
-    char* statement = "select * from journal where timestamp = (?)"; 
+    char *sql = "select text from journal where DATE(timestamp) = ?";    
 
+    // search for year
+    // statement = "select * from journal where timestamp like %(?)";
+
+    // search for month
+    // statement = "select * from journal where timestamp like ...(?)...";  
+    
+    int rc = sqlite3_prepare_v2(db, sql, -1, &statement, 0);
+    if (rc != SQLITE_OK) { // sqlite_ok = 0
+        fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db));
+        return rc;
+    }
+
+    // bind entry to placeholder (1 in this case, if there were more placeholders -- the next would be 2 and so on)
+    sqlite3_bind_text(statement, 1, *date, -1, SQLITE_STATIC);
+
+    // Execute and check for results
+    rc = sqlite3_step(statement);
+    if (rc == SQLITE_ROW) {
+        // Get the text column from result
+        const char *content = (const char*)sqlite3_column_text(statement, 0);
+        
+        // Allocate memory and copy
+        *entry = strdup(content);
+        
+        printf("Retrieved entry...\n"); 
+        return 0;
+    } 
+    else if (rc == SQLITE_DONE) {
+        printf("No rows found for date: %s\n", *date);
+        *entry = NULL;        
+        sqlite3_finalize(statement);
+        return 1;
+    } 
+    else {
+        fprintf(stderr, "SQLite error: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(statement);
+        return 1;
+    }
+
+    // release memory once finalized
+    sqlite3_finalize(statement);
+    return rc;
 }
 
 // construct the value for the timestamp first inside raylib based on user input
-void concatenate_placeholder_chars() 
+char* construct_date(Placeholder *placeholder) 
 {
-    //
+    char *return_string = malloc(sizeof(char) * placeholder->count + 1);
+    if (!return_string){
+        return NULL;
+    }
+
+    // memset(return_string, 0, placeholder->count + 1);
+
+    for (int i = 0; i < placeholder->count; i++) {
+        if (placeholder->items[i]) {
+            return_string[i] = *(placeholder->items[i]); 
+        }
+    }
+
+    return return_string;
 }
 
-void set_placeholder(Placeholder *placeholder, char* user_input) 
-{
-    placeholder->items = user_input;
+void DrawTextWrapped(const char *text, Rectangle rec, int fontSize, float spacing, Color color) {
+    if (!text) return; 
+    
+    // copy text
+    char *textCopy = strdup(text);
+    if (!textCopy) return; 
+    
+    // (current) drawing position
+    int posY = rec.y;
+    
+    char *savePtr;
+    char *line = strtok_r(textCopy, "\n", &savePtr);
+    
+    while (line != NULL && posY < rec.y + rec.height) {
+        // if the whole line fits in the textarea width
+        if (MeasureText(line, fontSize) <= rec.width) {
+            DrawText(line, rec.x, posY, fontSize, color);
+            posY += fontSize + spacing;
+        } else {
+            // line wrapping
+            int startPos = 0;
+            int textLen = strlen(line);
+            char buffer[1024] = {0};
+            
+            while (startPos < textLen && posY < rec.y + rec.height) {
+                int buffPos = 0;
+                int lastSpace = -1;
+                
+                // fill buffer until it would exceed width
+                for (int i = startPos; i < textLen; i++) {
+                    buffer[buffPos++] = line[i];
+                    buffer[buffPos] = '\0';
+                    
+                    // track spaces' position for word wrapping
+                    if (line[i] == " ") {
+                        lastSpace = i;
+                    }
+                    
+                    // check if buffer exceeds width
+                    if (MeasureText(buffer, fontSize) > rec.width) {
+                        if (lastSpace > startPos) {
+                            // break at last space
+                            buffer[buffPos - (i - lastSpace) - 1] = '\0';
+                            DrawText(buffer, rec.x, posY, fontSize, color);
+                            startPos = lastSpace + 1; // Skip the space
+                        } else {
+                            // no space found, force break at current position (character level wrap)
+                            buffer[buffPos - 1] = '\0';
+                            DrawText(buffer, rec.x, posY, fontSize, color);
+                            startPos = i;
+                        }
+                        break;
+                    }
+                    
+                    // end of text reached
+                    if (i == textLen - 1) {
+                        DrawText(buffer, rec.x, posY, fontSize, color);
+                        startPos = textLen;
+                    }
+                }                
+                posY += fontSize + spacing;
+            }
+        }        
+        // next line
+        line = strtok_r(NULL, "\n", &savePtr);
+    }    
+    free(textCopy);
 }
 
-void init_raylib() 
+// TODO: refactoring inside this function
+void init_raylib(sqlite3 *db) 
 {
     SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI);
-    InitWindow(1280, 800, "hello journal");
+    InitWindow(1280, 800, "journal");
     SearchAndSetResourceDir("resources");
 
+    // init empty dynamic array
     Placeholder placeholder = { 0 }; 
-
     bool enterPressed = false;
+    bool read_from_db_yet = false;
+    char *entry = NULL;
+    char *date = NULL;
+    Rectangle textArea = {10, 100, GetScreenWidth() - 20, GetScreenHeight() - 20};
+    bool db_result;
     
     // raylib loop
     while (!WindowShouldClose())
@@ -163,10 +289,7 @@ void init_raylib()
         BeginDrawing();
         ClearBackground(BLACK);
 
-        // TODO:
-        // set_placeholder(&placeholder, ...);
-
-        // refactor this to seperate function
+        // refactor this to seperate functions 
         int unicodeIntPressed = GetCharPressed();
         if (unicodeIntPressed > 0) {
             char* newChar = malloc(8); 
@@ -176,40 +299,55 @@ void init_raylib()
             }
         }
 
-        // remove the last char added to items
+        // remove the last char added to items on keypress
         if (IsKeyPressed(KEY_BACKSPACE)) {            
-            if (placeholder.count > 0) {
-                placeholder.count--;
-            }
-        }
-
-        DrawText("which date's entry would you like to view? example: 31/03/2001", 0, 0, 30, RED);        
+            if (placeholder.count > 0) placeholder.count--;            
+        }                     
         
+        // user input
         if (!enterPressed) {
-        // draw the items in placeholder
-            for (size_t i = 0; i < placeholder.count; i++) {
-                if (placeholder.items[i]) {
-                    DrawText(placeholder.items[i], 200 + (i * 50), 200, 40, RED);
-                }
+            DrawText("which date's entry would you like to view?", 0, 0, 60, RED); 
+            DrawText("example: 2025-03-30", 0, 60, 60, RED);
+            // draw the items in placeholder
+            for (int i = 0; i < placeholder.count; i++) {
+                if (placeholder.items[i]) DrawText(placeholder.items[i], 300 + (i * 50), 200, 60, RED);
             }
         }
-        // TODO:
-        // construct a string out of all the items in placeholder
+        
+        // construct a string from each individual item in the placeholder array
+        date = construct_date(&placeholder);
 
-        // save the string when enter is pressed and process it
+        // save that string when enter is pressed and process it
         if (IsKeyPressed(KEY_ENTER)) {
             if (!enterPressed) {
-                enterPressed = true;
+                enterPressed = true;         
             } else {
                 // TODO: find a nicer way to reset this flag
                 enterPressed = false;
             }
-            placeholder.count = 0;
         }
         
-        EndDrawing();
-    }
+        // process the date here, prevent infinite db reads with flag
+        if (date && enterPressed && !read_from_db_yet) {            
+            if (read_from_db(db, &date, &entry) == 0 && entry != NULL) {
+                db_result = true;              
+            } else {
+                db_result = false;
+            }
+            // stop the db read loop regardless of result
+            read_from_db_yet = true; 
+        }               
 
+        // depending on outcome, draw text for the user
+        if (db_result){
+            DrawTextWrapped(entry, textArea, 30, 5, WHITE);
+            DrawText("Press ESC to exit.\n", 400, 460, 60, WHITE);
+        } else if (!db_result && read_from_db_yet) {
+            DrawText("Cannot find this entry...\n", 400, 400, 60, RED);
+            DrawText("Press ESC to exit.\n", 400, 460, 60, WHITE);
+        }  
+        EndDrawing();
+    }   
     CloseWindow(); 
 }
 
@@ -245,7 +383,7 @@ int main() {
         printf("1. Add entry\n");
         printf("2. Read entry\n");
         printf("3. Exit\n");
-        printf("Choose an option.\n");
+        printf("Choose an option... (press 1, 2, 3)\n");
         printf("> ");
 
         size_t options_read = getline(&option, &option_buffer, stdin);
@@ -259,25 +397,22 @@ int main() {
         int menu_option = strtol(option, &endptr, 10);        
 
         switch (menu_option) {
-            case ADD_ENTRY:  
-                todays_entry = get_todays_entry();              
-                add_entry(db, day, month, year, todays_entry);
-                break;
-            case (READ_ENTRY):      
-                init_raylib();                   
-                break;
-            case (EXIT):
-                printf("Exiting...\n");
-                exit = true;
-                break;
-            default:
-                printf("Invalid option.\n");
-                break;
+        case ADD_ENTRY:  
+            todays_entry = get_todays_entry();              
+            add_entry(db, day, month, year, todays_entry);
+            break;
+        case (READ_ENTRY):      
+            init_raylib(db);                   
+            break;
+        case (EXIT):
+            printf("Exiting...\n");
+            exit = true;
+            break;
+        default:
+            printf("Invalid option.\n");
+            break;
         }
-    }  
-  
-
-
+    }    
     printf("Closing database...\n");
     sqlite3_close(db); 
 
