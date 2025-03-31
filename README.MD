@@ -16,4 +16,6 @@
 
 ##### The last menu option is exit, which does as it describes . . . 
 
+##### ps. this leaks memory all over the place 8-)=
+
 <br>
