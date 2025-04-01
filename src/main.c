@@ -15,11 +15,23 @@ typedef enum {
     EXIT
 } Options;
 
+typedef enum {
+    SELECT_DATE = 0,
+    SELECT_MONTH = 1,
+} SQLStatement;
+
 typedef struct {
     char** items;
     int capacity;
     int count;
+    SQLStatement statement;
 } Placeholder;
+
+typedef struct {
+    char** items;
+    int capacity;
+    int count;
+} DatabaseHits;
 
 void update_journal(int day, int month, int year, char entry[]) 
 {
@@ -127,38 +139,26 @@ void add_entry(sqlite3 *db, int day, int month, int year, char* todays_entry)
     }  
 }
 
-// TODO:
-int read_from_db(sqlite3 *db, char** date, char** entry)
+int get_specific_date_db_result(sqlite3 *db, char** date, char** entry, char *sql)
 {
-    printf("%s\n", *date);
-    sqlite3_stmt *statement;
-    // statement for specific date
-    char *sql = "select text from journal where DATE(timestamp) = ?";    
+    sqlite3_stmt *statement; 
 
-    // search for year
-    // statement = "select * from journal where timestamp like %(?)";
-
-    // search for month
-    // statement = "select * from journal where timestamp like ...(?)...";  
-    
     int rc = sqlite3_prepare_v2(db, sql, -1, &statement, 0);
     if (rc != SQLITE_OK) { // sqlite_ok = 0
         fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db));
         return rc;
     }
 
-    // bind entry to placeholder (1 in this case, if there were more placeholders -- the next would be 2 and so on)
+    // bind entry to placeholder
     sqlite3_bind_text(statement, 1, *date, -1, SQLITE_STATIC);
 
-    // Execute and check for results
+    // execute and check for results
     rc = sqlite3_step(statement);
     if (rc == SQLITE_ROW) {
-        // Get the text column from result
-        const char *content = (const char*)sqlite3_column_text(statement, 0);
-        
-        // Allocate memory and copy
-        *entry = strdup(content);
-        
+        // text column from result
+        const char *content = (const char*)sqlite3_column_text(statement, 0);           
+        *entry = strdup(content);    
+
         printf("Retrieved entry...\n"); 
         return 0;
     } 
@@ -179,6 +179,82 @@ int read_from_db(sqlite3 *db, char** date, char** entry)
     return rc;
 }
 
+int get_specific_month_db_result(sqlite3 *db, char** date, DatabaseHits *db_hits, char* sql)
+{
+    sqlite3_stmt *statement; 
+    int row_count = 0;
+
+    // prepare statement
+    int rc = sqlite3_prepare_v2(db, sql, -1, &statement, 0);
+    if (rc != SQLITE_OK) { 
+        fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db));
+        return rc;
+    }
+
+    // bind placeholder
+    rc = sqlite3_bind_text(statement, 1, *date, -1, SQLITE_STATIC);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Failed to bind placeholder: %s\n", sqlite3_errmsg(db));
+        sqlite3_finalize(statement);
+        return rc;
+    }
+    
+    // step through rows
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        row_count++;           
+        char *content = (char*)sqlite3_column_text(statement, 0);
+        if (content) {
+            // copy string
+            size_t len = strlen(content) + 1;  // +1 for null terminator
+            char *copy = malloc(len);
+            
+            if (copy) {
+                memcpy(copy, content, len);                
+                // Verify the copy worked
+                // printf("Row %d: copying '%s' to db_hits\n", row_count, copy);
+                nob_da_append(db_hits, copy);
+            } else {
+                fprintf(stderr, "Failed to allocate memory for row %d\n", row_count);
+            }
+        }
+    }
+
+    // finalize statement
+    rc = sqlite3_finalize(statement);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error finalizing statement: %s\n", sqlite3_errmsg(db));
+    }
+    return rc;
+}
+
+// TODO:
+int read_from_db(sqlite3 *db, char** date, char** entry, int statement_type, DatabaseHits *db_hits)
+{
+    // printf("%s\n", *date);       
+    char *sql;   
+    int rc; 
+
+    switch (statement_type)
+    {
+    case SELECT_DATE:
+        // statement for specific date
+        sql = "select text from journal where DATE(timestamp) = ?";
+        rc = get_specific_date_db_result(db, date, entry, sql);
+        break;
+    case SELECT_MONTH:        
+        // search for month
+        // statement = "select * from journal where timestamp like ...(?)...";  
+        sql = "select text from journal where STRFTIME('%Y-%m', timestamp) = ?";
+        rc = get_specific_month_db_result(db, date, db_hits, sql);
+        break;
+    default:
+        printf("statement type not given\n");
+        return 69;
+        break;
+    }
+    return rc;
+}
+
 // construct the value for the timestamp first inside raylib based on user input
 char* construct_date(Placeholder *placeholder) 
 {
@@ -195,15 +271,23 @@ char* construct_date(Placeholder *placeholder)
         }
     }
 
+    // set the statement type depending on how many chars the user gave
+    // 2025/04'\0' 8 chars
+    if (placeholder->count > 8) {
+        placeholder->statement = SELECT_DATE;
+    } else {
+        placeholder->statement = SELECT_MONTH;
+    }
+
     return return_string;
 }
 
 void DrawTextWrapped(const char *text, Rectangle rec, int fontSize, float spacing, Color color) {
-    if (!text) return; 
+    if (!text) return;
     
     // copy text
     char *textCopy = strdup(text);
-    if (!textCopy) return; 
+    if (!textCopy) return;
     
     // (current) drawing position
     int posY = rec.y;
@@ -232,7 +316,7 @@ void DrawTextWrapped(const char *text, Rectangle rec, int fontSize, float spacin
                     buffer[buffPos] = '\0';
                     
                     // track spaces' position for word wrapping
-                    if (line[i] == " ") {
+                    if (line[i] == ' ') {
                         lastSpace = i;
                     }
                     
@@ -240,14 +324,20 @@ void DrawTextWrapped(const char *text, Rectangle rec, int fontSize, float spacin
                     if (MeasureText(buffer, fontSize) > rec.width) {
                         if (lastSpace > startPos) {
                             // break at last space
-                            buffer[buffPos - (i - lastSpace) - 1] = '\0';
+                            buffer[buffPos - (i - lastSpace)] = '\0';
                             DrawText(buffer, rec.x, posY, fontSize, color);
-                            startPos = lastSpace + 1; // Skip the space
+                            startPos = lastSpace + 1; // skip space
+                        } else if (startPos == i) {
+                            // single character is already too wide - we have to break it
+                            buffer[1] = '\0';
+                            DrawText(buffer, rec.x, posY, fontSize, color);
+                            startPos = i + 1;
                         } else {
-                            // no space found, force break at current position (character level wrap)
-                            buffer[buffPos - 1] = '\0';
-                            DrawText(buffer, rec.x, posY, fontSize, color);
-                            startPos = i;
+                            // no space found but we're not at the start of a word
+                            // yhis means the whole word doesn't fit, so go to next line
+                            // without drawing anything
+                            buffer[0] = '\0';
+                            startPos = i; // try again from this position on the next line
                         }
                         break;
                     }
@@ -257,13 +347,16 @@ void DrawTextWrapped(const char *text, Rectangle rec, int fontSize, float spacin
                         DrawText(buffer, rec.x, posY, fontSize, color);
                         startPos = textLen;
                     }
-                }                
+                }
+                
                 posY += fontSize + spacing;
             }
-        }        
+        }
+        
         // next line
         line = strtok_r(NULL, "\n", &savePtr);
-    }    
+    }
+    
     free(textCopy);
 }
 
@@ -274,20 +367,28 @@ void init_raylib(sqlite3 *db)
     InitWindow(1280, 800, "journal");
     SearchAndSetResourceDir("resources");
 
-    // init empty dynamic array
+    // init empty dynamic arrays
     Placeholder placeholder = { 0 }; 
+    DatabaseHits database_hits = { 0 };
+
     bool enterPressed = false;
     bool read_from_db_yet = false;
     char *entry = NULL;
     char *date = NULL;
     Rectangle textArea = {10, 100, GetScreenWidth() - 20, GetScreenHeight() - 20};
-    bool db_result;
+    bool db_result = false;    
+    float blink_time = 0.0f;
+    float blink_interval = 0.33f;
+    bool blink_on = false;
+    int statement_type;
     
     // raylib loop
     while (!WindowShouldClose())
     {
         BeginDrawing();
         ClearBackground(BLACK);
+
+        float dt = GetFrameTime();
 
         // refactor this to seperate functions 
         int unicodeIntPressed = GetCharPressed();
@@ -308,6 +409,17 @@ void init_raylib(sqlite3 *db)
         if (!enterPressed) {
             DrawText("which date's entry would you like to view?", 0, 0, 60, RED); 
             DrawText("example: 2025-03-30", 0, 60, 60, RED);
+            
+            // draw blinking "> " to indicate to the user you can type something     
+            blink_time += dt;
+
+            if (blink_time >= blink_interval ) {
+                blink_on = !blink_on;
+                blink_time = 0.0f;
+            }
+
+            if (blink_on) DrawText(">", 275, 200, 60, RED);
+
             // draw the items in placeholder
             for (int i = 0; i < placeholder.count; i++) {
                 if (placeholder.items[i]) DrawText(placeholder.items[i], 300 + (i * 50), 200, 60, RED);
@@ -319,33 +431,53 @@ void init_raylib(sqlite3 *db)
 
         // save that string when enter is pressed and process it
         if (IsKeyPressed(KEY_ENTER)) {
-            if (!enterPressed) {
-                enterPressed = true;         
-            } else {
-                // TODO: find a nicer way to reset this flag
-                enterPressed = false;
-            }
+            if (!enterPressed) enterPressed = !enterPressed;     
         }
         
-        // process the date here, prevent infinite db reads with flag
-        if (date && enterPressed && !read_from_db_yet) {            
-            if (read_from_db(db, &date, &entry) == 0 && entry != NULL) {
-                db_result = true;              
-            } else {
-                db_result = false;
-            }
-            // stop the db read loop regardless of result
-            read_from_db_yet = true; 
-        }               
+        // upon enter press get the statement type
+        if (enterPressed) {
+            if (date) statement_type = placeholder.statement;     
+        }   
 
-        // depending on outcome, draw text for the user
-        if (db_result){
+        // process the date here, prevent infinite db reads with flag
+        // Process the database query ONCE when conditions are met
+        if (enterPressed && date && !read_from_db_yet) {
+            // Set flag to prevent further DB reads in future frames
+            read_from_db_yet = true;
+            
+            if (statement_type == SELECT_DATE) {
+                if (read_from_db(db, &date, &entry, statement_type, &database_hits) == 0 && entry != NULL) {
+                    db_result = true;
+                }
+            } else if (statement_type == SELECT_MONTH) {
+                if (read_from_db(db, &date, &entry, statement_type, &database_hits) == 0 && database_hits.count > 0) {
+                    db_result = true;
+                }
+            }
+        }    
+              
+        // single result
+        if (db_result && statement_type == SELECT_DATE) {
             DrawTextWrapped(entry, textArea, 30, 5, WHITE);
             DrawText("Press ESC to exit.\n", 400, 460, 60, WHITE);
+
+
+        // multiple results
+        // TODO: fix text wrapping function to work with input from dynamic array, add the date above as well 
+        // or maybe prefix it and add scrolling support 
+        } else if (db_result && statement_type == SELECT_MONTH) {
+            for (int i = 0; i < database_hits.count; i++) {
+                if (database_hits.items[i]) {
+                    DrawText(database_hits.items[i], 10, 0 + (i * 100), 40, WHITE);
+                }
+            }
+            // all the way at the bottom when done scrolling
+            // DrawText("Press ESC to exit.\n", x, y, 60, WHITE);
         } else if (!db_result && read_from_db_yet) {
             DrawText("Cannot find this entry...\n", 400, 400, 60, RED);
             DrawText("Press ESC to exit.\n", 400, 460, 60, WHITE);
         }  
+
         EndDrawing();
     }   
     CloseWindow(); 
