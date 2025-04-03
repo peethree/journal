@@ -217,17 +217,19 @@ int get_specific_month_db_result(sqlite3 *db, char** date, DatabaseHits *db_hits
     }
 
     // return with error, if no results for sql query
-    if (sqlite3_step(statement) == SQLITE_DONE) {
+    rc = sqlite3_step(statement);    
+    if (rc == SQLITE_DONE) {
         printf("No rows found for month: %s\n", *date);
         sqlite3_finalize(statement);
         return 1; 
     }
     
     // step through all the rows and append copy of each result to db_hits
-    while (sqlite3_step(statement) == SQLITE_ROW) {
+    while (rc == SQLITE_ROW) {
         // row_count++;           
         char *content = (char*)sqlite3_column_text(statement, 0);
         char *db_date = (char*)sqlite3_column_text(statement, 1);
+        // printf("date retrieved: %s\n", db_date);
 
         if (content && db_date) { 
             // copy string + date
@@ -249,7 +251,8 @@ int get_specific_month_db_result(sqlite3 *db, char** date, DatabaseHits *db_hits
                 fprintf(stderr, "Failed to allocate memory for row %d\n", row_count);
             }
         }       
-        // printf("retrieved entries: %d\n", row_count);
+        // update to next step to continue the while loop
+        rc = sqlite3_step(statement);
     }
 
     rc = sqlite3_finalize(statement);
@@ -587,6 +590,7 @@ void init_raylib(sqlite3 *db)
             }               
             DrawText("Press ESC to exit.\n", 400, 460, 60, WHITE);        
         } else if (dbResult && statementType == SELECT_MONTH) {  // multiple results found
+            // printf("first db result: %s\n", database_hits.items[0].date);
             if (database_hits.count > 0) {
                 for (int i = 0; i < database_hits.count; i++) {   
                     DrawText(database_hits.items[i].date, 0, currentTextY - 35, 30, RED);            
