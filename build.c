@@ -1,5 +1,6 @@
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
+
 #include "nob.h"
 
 // cc -o build build.c

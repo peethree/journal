@@ -262,7 +262,6 @@ int get_specific_month_db_result(sqlite3 *db, char** date, DatabaseHits *db_hits
     return rc;
 }
 
-// TODO:
 int read_from_db(sqlite3 *db, char** date, int statementType, DatabaseHits *db_hits)
 {
     char *sql;   
@@ -301,7 +300,7 @@ char* construct_date(Placeholder *placeholder)
         }
     }
 
-    // set the statement type depending on how many chars the user gave
+    // set the statement type depending on how many characters the user put in
     // 2025-04'\0' 8 chars
     if (placeholder->count > 8) {
         placeholder->statement = SELECT_DATE;
@@ -641,13 +640,14 @@ int main() {
     bool exit = false;
 
     while (!exit) {
-        printf("1. Add entry\n");
-        printf("2. Read entry\n");
-        printf("3. Exit\n");
-        printf("Choose an option... (press 1, 2, 3)\n");
+        printf("Choose an option by picking a number...\n");
+        printf("1 - Add entry\n");
+        printf("2 - Read entry\n");
+        printf("3 - Exit\n");
+        
         printf("> ");
 
-        size_t options_read = getline(&option, &option_buffer, stdin);
+        int options_read = getline(&option, &option_buffer, stdin);
         if (options_read < 1) {
             printf("Invalid input.\n");
             continue;
