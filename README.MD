@@ -16,6 +16,6 @@
 
 ##### The last menu option is exit, which does as it describes . . . 
 
-##### ps. this leaks memory all over the place 8-)=
+[![journal showcase](https://img.youtube.com/vi/J0kNFk9ZlbE/0.jpg)](https://www.youtube.com/watch?v=J0kNFk9ZlbE)
 
 <br>

@@ -182,7 +182,6 @@ int get_specific_date_db_result(sqlite3 *db, char** date, DatabaseHits *db_hits,
     } 
     else if (rc == SQLITE_DONE) {
         printf("No rows found for date: %s\n", *date);
-        db_hits->items[db_hits->count].text = NULL;        
         sqlite3_finalize(statement);
         return 1;
     } 
@@ -192,7 +191,7 @@ int get_specific_date_db_result(sqlite3 *db, char** date, DatabaseHits *db_hits,
         return 1;
     }
 
-    // release memory once finalized
+    // release memory
     sqlite3_finalize(statement);
     return rc;
 }
@@ -216,10 +215,17 @@ int get_specific_month_db_result(sqlite3 *db, char** date, DatabaseHits *db_hits
         sqlite3_finalize(statement);
         return rc;
     }
+
+    // return with error, if no results for sql query
+    if (sqlite3_step(statement) == SQLITE_DONE) {
+        printf("No rows found for month: %s\n", *date);
+        sqlite3_finalize(statement);
+        return 1; 
+    }
     
-    // step through rows
+    // step through all the rows and append copy of each result to db_hits
     while (sqlite3_step(statement) == SQLITE_ROW) {
-        row_count++;           
+        // row_count++;           
         char *content = (char*)sqlite3_column_text(statement, 0);
         char *db_date = (char*)sqlite3_column_text(statement, 1);
 
@@ -242,11 +248,10 @@ int get_specific_month_db_result(sqlite3 *db, char** date, DatabaseHits *db_hits
             } else {
                 fprintf(stderr, "Failed to allocate memory for row %d\n", row_count);
             }
-        }
-        printf("retrieved entries: %d\n", row_count);
+        }       
+        // printf("retrieved entries: %d\n", row_count);
     }
 
-    // finalize statement
     rc = sqlite3_finalize(statement);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Error finalizing statement: %s\n", sqlite3_errmsg(db));
@@ -255,13 +260,12 @@ int get_specific_month_db_result(sqlite3 *db, char** date, DatabaseHits *db_hits
 }
 
 // TODO:
-int read_from_db(sqlite3 *db, char** date, int statement_type, DatabaseHits *db_hits)
+int read_from_db(sqlite3 *db, char** date, int statementType, DatabaseHits *db_hits)
 {
-    // printf("%s\n", *date);       
     char *sql;   
     int rc; 
 
-    switch (statement_type)
+    switch (statementType)
     {
     case SELECT_DATE:
         // statement for specific date
@@ -269,15 +273,13 @@ int read_from_db(sqlite3 *db, char** date, int statement_type, DatabaseHits *db_
         rc = get_specific_date_db_result(db, date, db_hits, sql);
         break;
     case SELECT_MONTH:        
-        // search for month
-        // statement = "select * from journal where timestamp like ...(?)...";  
+        // search for month, in this case also keep track of the date for each entry
         sql = "select text, timestamp from journal where STRFTIME('%Y-%m', timestamp) = ?";
         rc = get_specific_month_db_result(db, date, db_hits, sql);
         break;
     default:
         printf("statement type not given\n");
-        return 69;
-        break;
+        return 1;
     }
     return rc;
 }
@@ -285,14 +287,14 @@ int read_from_db(sqlite3 *db, char** date, int statement_type, DatabaseHits *db_
 // construct the value for the timestamp first inside raylib based on user input
 char* construct_date(Placeholder *placeholder) 
 {
-    char *return_string = malloc(sizeof(char) * placeholder->count + 1);
-    if (!return_string){
+    char *dateString = malloc(sizeof(char) * placeholder->count + 1);
+    if (!dateString){
         return NULL;
     }
 
     for (int i = 0; i < placeholder->count; i++) {
         if (placeholder->items[i]) {
-            return_string[i] = *(placeholder->items[i]); 
+            dateString[i] = *(placeholder->items[i]); 
         }
     }
 
@@ -304,10 +306,9 @@ char* construct_date(Placeholder *placeholder)
         placeholder->statement = SELECT_MONTH;
     }
 
-    return return_string;
+    return dateString;
 }
 
-// ai garbage
 void DrawTextWrapped(const char *text, Rectangle rec, int fontSize, float spacing, Color color) {
     if (!text) return;
     
@@ -384,8 +385,6 @@ void DrawTextWrapped(const char *text, Rectangle rec, int fontSize, float spacin
     free(textCopy);
 }
 
-
-// ai garbage
 int CalculateTextHeight(const char *text, int fontSize, float spacing, float maxWidth) {
     if (!text) return 0;
     
@@ -443,26 +442,30 @@ int CalculateTextHeight(const char *text, int fontSize, float spacing, float max
     return height;
 }
 
+void draw_text_sequentially(const char* text, int x, int width, int fontSize, float spacing, Color color) {
+    // height needed for given paragraph
+    int height = CalculateTextHeight(text, fontSize, spacing, width);
 
-void draw_text_sequentially(const char* text, float x, float width, int fontSize, float spacing, Color color) {
-    // height needed for paragraph
-    int height = CalculateTextHeight(text, fontSize, spacing, width);      
-    Rectangle textArea = {x, currentTextY, width, height};
+    Rectangle textArea = {
+        (float)x, 
+        (float)currentTextY, 
+        (float)width, 
+        (float)height
+    };
+
     DrawTextWrapped(text, textArea, fontSize, spacing, color);
     
-    // update the y for next paragraph
+    // update the y value to be drawn at for next paragraph
     if (!positionsCalculated) {
-        currentTextY += height + 40; // padding
+        currentTextY += height + 50; // padding
     }
-
-    // TODO: inside the padding I could print date of the post
 }
 
 void scroll(Camera2D *camera)
 {
     // allow for scrolling up and down
     Vector2 scroll = GetMouseWheelMoveV();        
-    camera->target.y -= scroll.y * 20.0f;
+    camera->target.y -= scroll.y * 36.0f;
     // clamp at y = 0
     if (camera->target.y < 0) {
         camera->target.y = 0;
@@ -481,14 +484,14 @@ void init_raylib(sqlite3 *db)
     DatabaseHits database_hits = { 0 };
 
     bool enterPressed = false;
-    bool read_from_db_yet = false;
+    bool readFromDB = false;
     char *date = NULL;
     Rectangle textArea = {10, 100, GetScreenWidth() - 20, GetScreenHeight() - 20};
-    bool db_result = false;    
-    float blink_time = 0.0f;
-    float blink_interval = 0.33f;
-    bool blink_on = false;
-    int statement_type;
+    bool dbResult = false;    
+    float blinkTime = 0.0f;
+    float blinkInterval = 0.33f;
+    bool blinkOn = false;
+    int statementType;
     
     // cam
     Camera2D camera = { 0 };
@@ -512,6 +515,7 @@ void init_raylib(sqlite3 *db)
         float dt = GetFrameTime();
 
         // refactor this to seperate functions 
+        // get the user's input 
         int unicodeIntPressed = GetCharPressed();
         if (unicodeIntPressed > 0) {
             char* newChar = malloc(8); 
@@ -521,87 +525,79 @@ void init_raylib(sqlite3 *db)
             }
         }        
 
-        // remove the last char added to items on keypress
+        // remove the last character of user's input on each press of backspace
         if (IsKeyPressed(KEY_BACKSPACE)) {            
             if (placeholder.count > 0) placeholder.count--;            
         }                     
         
-        // user input
+        // instructions
         if (!enterPressed) {
-            DrawText("which date's entry would you like to view?", 0, 0, 60, RED); 
-            DrawText("example: 2025-03-30", 0, 60, 60, RED);
+            DrawText("Which date's entry would you like to view?", 10, 10, 50, RED); 
+            DrawText("For example: 2025-03-30", 10, 60, 50, RED);
+            DrawText("Note: single digit days and months have to be prefixed with a 0", 10, 110, 30, RED);
             
             // draw blinking "> " to indicate to the user you can type something     
-            blink_time += dt;
+            blinkTime += dt;
 
-            if (blink_time >= blink_interval ) {
-                blink_on = !blink_on;
-                blink_time = 0.0f;
+            if (blinkTime >= blinkInterval ) {
+                blinkOn = !blinkOn;
+                blinkTime = 0.0f;
             }
 
-            if (blink_on) DrawText(">", 275, 200, 60, RED);
+            if (blinkOn) DrawText(">", 275, 200, 60, RED);
 
-            // draw the items in placeholder
+            // draw the user's input
             for (int i = 0; i < placeholder.count; i++) {
                 if (placeholder.items[i]) DrawText(placeholder.items[i], 300 + (i * 50), 200, 60, RED);
             }
         }
         
-        // construct a string from each individual item in the placeholder array
+        // construct a string from the user's input, which has been appended into the placeholder array
         date = construct_date(&placeholder);
-
-        // save that string when enter is pressed and process it
-        if (IsKeyPressed(KEY_ENTER)) {
-            if (!enterPressed) enterPressed = !enterPressed;     
-        }
+    
+        if (IsKeyPressed(KEY_ENTER)) enterPressed = true;      
         
-        // upon enter press get the statement type
+        // get the statement type required for the sql query
         if (enterPressed) {
-            if (date) statement_type = placeholder.statement;     
+            if (date) statementType = placeholder.statement;     
         }   
 
-        // process the date here, prevent infinite db reads with flag
-        if (enterPressed && date && !read_from_db_yet) {
-            // set flag to prevent further DB reads in future frames
-            read_from_db_yet = true;
+        // process the date here
+        if (enterPressed && date && !readFromDB) {
+            // set flag to prevent further DB reads in future frames (result won't be different for the following frame)
+            readFromDB = true;
             
-            if (statement_type == SELECT_DATE) {
-                if (read_from_db(db, &date, statement_type, &database_hits) == 0) {
-                    db_result = true;
-                }
-            } else if (statement_type == SELECT_MONTH) {
-                if (read_from_db(db, &date, statement_type, &database_hits) == 0) {
-                    db_result = true;
+            if (statementType == SELECT_DATE) {
+                if (read_from_db(db, &date, statementType, &database_hits) == 0) {
+                    dbResult = true;
+                } 
+            } else if (statementType == SELECT_MONTH) {
+                if (read_from_db(db, &date, statementType, &database_hits) == 0) {
+                    dbResult = true;
                 }
             }
-        }    
-              
-        // single result
-        if (db_result && statement_type == SELECT_DATE) {
+        }                  
+        
+        if (dbResult && statementType == SELECT_DATE) { // single result found
             if (database_hits.count > 0) {
                 for (int i = 0; i < database_hits.count; i++) {
                     DrawText(database_hits.items[i].date, 0, 0, 30, RED);
                     DrawTextWrapped(database_hits.items[i].text, textArea, 30, 5, WHITE);
                 } 
             }               
-            DrawText("Press ESC to exit.\n", 400, 460, 60, WHITE);            
-
-        // multiple results
-        // TODO: prefix the entries with the date. 
-        } else if (db_result && statement_type == SELECT_MONTH) {
+            DrawText("Press ESC to exit.\n", 400, 460, 60, WHITE);        
+        } else if (dbResult && statementType == SELECT_MONTH) {  // multiple results found
             if (database_hits.count > 0) {
                 for (int i = 0; i < database_hits.count; i++) {   
                     DrawText(database_hits.items[i].date, 0, currentTextY - 35, 30, RED);            
                     draw_text_sequentially(database_hits.items[i].text, 10, GetScreenWidth() - 20, 30, 5, WHITE);                
-                }
-                DrawText("Press ESC to exit.\n", 400, currentTextY + 200, 60, WHITE); 
+                }                
             }
-            // no longer update text position y when everything has already been calculated
+            DrawText("Press ESC to exit.\n", 400, currentTextY + 200, 60, WHITE); 
+            // no longer update text position y (used for consecutive paragraphs) 
+            // when everything has already been calculated once
             positionsCalculated = true;
-
-            // all the way at the bottom when done scrolling
-            // DrawText("Press ESC to exit.\n", x, y, 60, WHITE);
-        } else if (!db_result && read_from_db_yet) {
+        } else if (!dbResult && readFromDB) { // no results after db has been read
             DrawText("Cannot find this entry...\n", 400, 400, 60, RED);
             DrawText("Press ESC to exit.\n", 400, 460, 60, WHITE);
         }  
@@ -624,7 +620,7 @@ int main() {
     }
     printf("Opened db successfully...\n");  
 
-    // get time
+    // get current time
     time_t t = time(NULL);
     struct tm *tm_info = localtime(&t);
   
