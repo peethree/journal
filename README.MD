@@ -8,6 +8,12 @@
 
 ##### For ease of use, I'd advice making a shell script (bash in my case) in /usr/local/bin/ that runs the program from its actual path and saving it as /usr/local/bin/journal so the program can be run simply by writing "journal" in the terminal.
 
+```
+#!/bin/bash
+cd /into/directory/of/the/journal/binary
+./journal
+```
+
 ##### Upon running the program, user is met with a menu of choices inside the terminal. the user can either add an entry. If chosen, one can then type a message and once done writing (enter is pressed), the program will ask to confirm if it should be saved or not. Answer "y" to save, "n" to exit the program. Or cancel the program by pressing ctrl + C.
 
 ##### Now also saves the entry into a sqlite db.
@@ -21,7 +27,9 @@
 <br>
 
 #### dependencies:
-+ raylib
++ raylib + resource_dir.h (maybe add some textures in the future or allow pictures to be added to the db and then grab them to be used as textures inside the raylib window)
 + a sqlite3 db called "test.db" -- this should be a db name from an env file instead in the future
 + sqlite3.h
 + nob.h
+
+
