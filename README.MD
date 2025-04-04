@@ -19,3 +19,9 @@
 [![journal showcase](https://img.youtube.com/vi/J0kNFk9ZlbE/0.jpg)](https://www.youtube.com/watch?v=J0kNFk9ZlbE)
 
 <br>
+
+#### dependencies:
++ raylib
++ a sqlite3 db called "test.db" -- this should be a db name from an env file instead in the future
++ sqlite3.h
++ nob.h

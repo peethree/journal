@@ -226,7 +226,7 @@ int get_specific_month_db_result(sqlite3 *db, char** date, DatabaseHits *db_hits
     
     // step through all the rows and append copy of each result to db_hits
     while (rc == SQLITE_ROW) {
-        // row_count++;           
+        row_count++;           
         char *content = (char*)sqlite3_column_text(statement, 0);
         char *db_date = (char*)sqlite3_column_text(statement, 1);
         // printf("date retrieved: %s\n", db_date);
