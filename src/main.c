@@ -580,14 +580,24 @@ void init_raylib(sqlite3 *db)
             }
         }                  
         
+        // borrows some code from drawing text sequentially so the exit instructions
+        // don't overlap with the retrieved text
+        int height;
+
         if (dbResult && statementType == SELECT_DATE) { // single result found
             if (database_hits.count > 0) {
                 for (int i = 0; i < database_hits.count; i++) {
                     DrawText(database_hits.items[i].date, 0, 0, 30, RED);
                     DrawTextWrapped(database_hits.items[i].text, textArea, 30, 5, WHITE);
+                    height = CalculateTextHeight(database_hits.items[i].text, 30, 5, (float)(GetScreenWidth() - 20));
+                    
+                    if (!positionsCalculated) {
+                        currentTextY += height + 50; 
+                    }
                 } 
-            }               
-            DrawText("Press ESC to exit.\n", 400, 460, 60, WHITE);        
+            }          
+              
+            DrawText("Press ESC to exit.\n", 400, currentTextY, 60, WHITE);        
         } else if (dbResult && statementType == SELECT_MONTH) {  // multiple results found
             // printf("first db result: %s\n", database_hits.items[0].date);
             if (database_hits.count > 0) {
