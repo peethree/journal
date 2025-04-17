@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 #include "sqlite3.h"
 #include "raylib.h"
@@ -18,6 +19,7 @@ typedef enum {
 typedef enum {
     SELECT_DATE = 0,
     SELECT_MONTH = 1,
+    SELECT_LIKE = 2,
 } SQLStatement;
 
 typedef struct {
@@ -266,6 +268,7 @@ int read_from_db(sqlite3 *db, char** date, int statementType, DatabaseHits *db_h
 {
     char *sql;   
     int rc; 
+    char *search_pattern;
 
     switch (statementType)
     {
@@ -278,6 +281,24 @@ int read_from_db(sqlite3 *db, char** date, int statementType, DatabaseHits *db_h
         // search for month, in this case also keep track of the date for each entry
         sql = "select text, timestamp from journal where STRFTIME('%Y-%m', timestamp) = ?";
         rc = get_specific_month_db_result(db, date, db_hits, sql);
+        break;
+    case SELECT_LIKE:
+        // search for entry that contains the following text
+        sql = "select text, timestamp from journal where text like ?";
+
+        search_pattern = malloc(256 * sizeof(char));
+        if (search_pattern == NULL) {
+            printf("Ram-bros... not like this\n");
+            return 1;
+        }
+        
+        // %% prefix to %s to formulate a 'literal' % sign
+        snprintf(search_pattern, 256, "%%%s%%", *date);
+        
+        // get_result function expects a pointer so replace it with the search pattern
+        *date = search_pattern;
+        rc = get_specific_month_db_result(db, date, db_hits, sql);
+        free(search_pattern);
         break;
     default:
         printf("statement type not given\n");
@@ -301,11 +322,15 @@ char* construct_date(Placeholder *placeholder)
     }
 
     // set the statement type depending on how many characters the user put in
-    // 2025-04'\0' 8 chars
-    if (placeholder->count > 8) {
+    // 2025-03-31
+    if (placeholder->count > 7 && isdigit((unsigned char)placeholder->items[0][0])) { // check if first character is a number 
         placeholder->statement = SELECT_DATE;
-    } else {
+    // 2025-04
+    } else if (placeholder->count == 7 && isdigit((unsigned char)placeholder->items[0][0])){
         placeholder->statement = SELECT_MONTH;
+    // anything else, sql LIKE query '%your search here%', only works with single words currently 
+    } else {
+        placeholder->statement = SELECT_LIKE;
     }
 
     return dateString;
@@ -579,18 +604,26 @@ void init_raylib(sqlite3 *db)
         // process the date here
         if (enterPressed && date && !readFromDB) {
             // set flag to prevent further DB reads in future frames (result won't be different for the following frame)
-            readFromDB = true;
-            
-            if (statementType == SELECT_DATE) {
-                if (read_from_db(db, &date, statementType, &database_hits) == 0) {
-                    dbResult = true;
-                } 
-            } else if (statementType == SELECT_MONTH) {
-                if (read_from_db(db, &date, statementType, &database_hits) == 0) {
-                    dbResult = true;
-                }
+            readFromDB = true;       
+                    
+            switch (statementType) {
+                case SELECT_DATE:
+                    if (read_from_db(db, &date, statementType, &database_hits) == 0) {
+                        dbResult = true;
+                    }
+                break;
+                case SELECT_MONTH:
+                    if (read_from_db(db, &date, statementType, &database_hits) == 0) {
+                        dbResult = true;
+                    }
+                    break;
+                case SELECT_LIKE:
+                    if (read_from_db(db, &date, statementType, &database_hits) == 0) {
+                        dbResult = true;
+                    }
+                    break;
             }
-        }                  
+        }                 
         
         // borrows some code from drawing text sequentially so the exit instructions
         // don't overlap with the retrieved text
@@ -620,6 +653,15 @@ void init_raylib(sqlite3 *db)
             DrawText("Press ESC to exit.\n", 400, currentTextY + 200, 60, WHITE); 
             // no longer update text position y (used for consecutive paragraphs) 
             // when everything has already been calculated once
+            positionsCalculated = true;
+        } else if (dbResult && statementType == SELECT_LIKE) {  // arbitrary search
+            if (database_hits.count > 0) {
+                for (int i = 0; i < database_hits.count; i++) {   
+                    DrawText(database_hits.items[i].date, 0, currentTextY - 35, 30, RED);            
+                    draw_text_sequentially(database_hits.items[i].text, 10, GetScreenWidth() - 20, 30, 5, WHITE);                
+                }                
+            }
+            DrawText("Press ESC to exit.\n", 400, currentTextY + 200, 60, WHITE); 
             positionsCalculated = true;
         } else if (!dbResult && readFromDB) { // no results after db has been read
             DrawText("Cannot find this entry...\n", 400, 400, 60, RED);
