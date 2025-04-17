@@ -546,11 +546,23 @@ void init_raylib(sqlite3 *db)
                 blinkTime = 0.0f;
             }
 
-            if (blinkOn) DrawText(">", 275, 200, 60, RED);
-
+            if (blinkOn) DrawText(">", 275, 200, 60, RED);    
+            
+            int pos_x = 300;
+            int pos_y = 200;
+            
             // draw the user's input
             for (int i = 0; i < placeholder.count; i++) {
-                if (placeholder.items[i]) DrawText(placeholder.items[i], 300 + (i * 50), 200, 60, RED);
+                // calculate how many characters fit per line
+                int chars_per_line = (GetScreenWidth() - 20 - pos_x) / 50;  
+                int line = i / chars_per_line;
+                
+                // position on the current line
+                int line_position = i % chars_per_line;                
+                int current_x = pos_x + (line_position * 50);
+                int current_y = pos_y + (line * 60);
+                
+                if (placeholder.items[i]) DrawText(placeholder.items[i], current_x, current_y, 60, RED);
             }
         }
         
@@ -595,8 +607,7 @@ void init_raylib(sqlite3 *db)
                         currentTextY += height + 50; 
                     }
                 } 
-            }          
-              
+            }                        
             DrawText("Press ESC to exit.\n", 400, currentTextY, 60, WHITE);        
         } else if (dbResult && statementType == SELECT_MONTH) {  // multiple results found
             // printf("first db result: %s\n", database_hits.items[0].date);
