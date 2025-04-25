@@ -286,14 +286,16 @@ int read_from_db(sqlite3 *db, char** date, int statementType, DatabaseHits *db_h
         // search for entry that contains the following text
         sql = "select text, timestamp from journal where text like ?";
 
-        search_pattern = malloc(256 * sizeof(char));
+        size_t len = strlen(*date);
+        size_t placeholder_len = len + 3;
+        search_pattern = malloc(placeholder_len); // 3: 2 for encompassing % % and 1 for null terminator
+
         if (search_pattern == NULL) {
             printf("Ram-bros... not like this\n");
             return 1;
-        }
-        
+        }        
         // %% prefix to %s to formulate a 'literal' % sign
-        snprintf(search_pattern, 256, "%%%s%%", *date);
+        snprintf(search_pattern, placeholder_len, "%%%s%%", *date);
         
         // get_result function expects a pointer so replace it with the search pattern
         *date = search_pattern;
