@@ -671,8 +671,9 @@ void init_raylib(sqlite3 *db)
         }  
 
         EndMode2D();
-        EndDrawing();
+        EndDrawing();        
     }   
+    free(date);
     CloseWindow(); 
 }
 
