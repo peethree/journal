@@ -495,10 +495,23 @@ void scroll(Camera2D *camera)
     // allow for scrolling up and down
     Vector2 scroll = GetMouseWheelMoveV();        
     camera->target.y -= scroll.y * 36.0f;
+
+    // add arrow key support since scrolling on laptop without a mouse is tricky
+    if (IsKeyDown(KEY_DOWN)) {
+        camera->target.y += 36.0f;
+    }
+
+    if (IsKeyDown(KEY_UP)) {
+        camera->target.y -= 36.0f;
+    }
+
     // clamp at y = 0
     if (camera->target.y < 0) {
         camera->target.y = 0;
     }
+
+
+
 }
 
 // TODO: refactoring inside this function
